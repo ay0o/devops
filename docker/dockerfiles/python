@@ -1,0 +1,15 @@
+FROM python:3.8-alpine AS builder
+COPY requirements.txt .
+# By using --user, the requirements will be installed in /root/.local and can be copied to the final image.
+RUN pip install --user -r requirements.txt
+
+FROM python:3.8-alpine
+
+RUN adduser -h /home/app -D app
+WORKDIR /home/app
+COPY --chown=app:app --from=builder /root/.local /home/app/.local
+COPY --chown=app app.py .
+
+ENV PATH=/home/app/.local:$PATH
+USER app
+ENTRYPOINT [ "python", "app.py" ]

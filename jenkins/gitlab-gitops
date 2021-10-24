@@ -1,0 +1,84 @@
+#!/usr/bin/env groovy
+
+pipeline {
+
+    agent {
+        label 'deploy'
+    }
+
+    triggers {
+        gitlab(
+            triggerOnPush: true,
+            triggerOnMergeRequest: true,
+            triggerOnNoteRequest: true,
+            triggerOpenMergeRequestOnPush: "never",
+            noteRegex: "/rebuild",
+            skipWorkInProgressMergeRequest: true,
+            ciSkip: true,
+            setBuildDescription: true,
+            addNoteOnMergeRequest: false,
+            addCiMessage: false,
+            addVoteOnMergeRequest: false,
+            acceptMergeRequestOnSuccess: false,
+            branchFilterType: "NameBasedFilter",
+            includeBranchesSpec: "master",
+            excludeBranchesSpec: "",
+            secretToken: null
+        )
+    }
+
+    options {
+        ansiColor('xterm')
+        buildDiscarder(logRotator(numToKeepStr: '100'))
+        disableConcurrentBuilds()
+        skipDefaultCheckout()
+        timeout(time: 1, unit: 'HOURS')
+        gitLabConnection('GITLAB')
+        timestamps()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    if (env.gitlabMergeRequestId) {
+                        git branch: env.gitlabSourceBranch, credentialsId: <GITLAB_CREDENTIALS>, url: <REPO>
+                    }
+                    else {
+                        git credentialsId: <GITLAB_CREDENTIALS>, url: <REPO>
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            when {
+                expression { env.gitlabMergeRequestId }
+            }
+            steps {
+                sh 'make test'
+            }
+        }
+        stage('Build') {
+            when {
+                expression { !env.gitlabMergeRequestId }
+            }
+            steps {
+                sh 'make build'
+            }
+        }
+        stage('Deploy') {
+            when {
+                expression { !env.gitlabMergeRequestId }
+            }
+            steps {
+                sh 'make deploy'
+            }
+        }
+    }
+    post {
+        cleanup {
+            cleanWs()
+        }
+    }
+}

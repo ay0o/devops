@@ -1,0 +1,25 @@
+# Dockerfile using a CGO lib (librdkafka)
+FROM golang:alpine AS builder
+
+# Install librdkafka
+RUN apk add --no-cache librdkafka-dev
+
+WORKDIR /go/src/github.com/ay0o/my_project.git
+COPY . /go/src/github.com/ay0o/my_project.git
+
+RUN go mod download \
+# gcr.io/distroless/static is based on Debian, so set GOOS and GOARCH to compile only for that architecture
+ && GOOS=linux GOARCH=amd64 go build main.go
+
+# Scratch image cannot be used when libc is required
+FROM gcr.io/distroless/static
+
+# Install librdkafka in the final image as well
+RUN apk add --no-cache librdkafka
+
+COPY --from=builder /go/src/github.com/ay0o/my_project.git/main /app
+
+# gcr.io/distroless/static has a nonroot user
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app"]

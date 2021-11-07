@@ -1,0 +1,21 @@
+FROM python:3.8-alpine AS base
+RUN adduser -h /home/app -D app
+WORKDIR /home/app
+COPY --chown=app application.py .
+
+FROM base AS test
+COPY requirements.txt .
+COPY ci/.bandit .bandit
+RUN pip install --no-cache-dir bandit safety
+RUN safety check --full-report -r requirements.txt
+RUN bandit -r --ini .bandit ./*.py
+
+FROM base AS build
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+FROM base
+COPY --chown=app:app --from=build /root/.local /home/app/.local
+ENV PATH=/home/app/.local:$PATH
+USER app
+ENTRYPOINT [ "python", "application.py" ]
